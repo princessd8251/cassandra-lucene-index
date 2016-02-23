@@ -82,5 +82,19 @@ public class IndexWriterSkinny extends IndexWriter {
                 service.delete(key);
             }
         });
+        if (transactionType.equals(IndexTransaction.Type.COMPACTION)) {
+            Row row = null;
+            UnfilteredRowIterator iterator= service.read(key,nowInSec,opGroup);
+            if (iterator.hasNext()) {
+                row = (Row) iterator.next();
+            }
+            if (row!=null) {
+                if (row.hasLiveData(nowInSec)) {
+                    service.upsert(key, row);
+                } else {
+                    service.delete(key);
+                }
+            }
+        }
     }
 }

@@ -3,6 +3,7 @@
 ## 3.0.3.1 (upcoming)
 
 * Fix performance issues with ClusteringIndexNamesFilter
+* Add TTL support 
 
 ## 3.0.3.0 (19 February 2016)
 

@@ -98,5 +98,22 @@ public class IndexWriterWide extends IndexWriter {
                 service.delete(key, row);
             }
         }));
+        if (transactionType.equals(IndexTransaction.Type.COMPACTION)) {
+            Map<Clustering, Optional<Row>> rows = new LinkedHashMap<>();
+            service.read(key, nowInSec, opGroup).forEachRemaining(unfiltered -> {
+
+                Row row = (Row) unfiltered;
+
+                rows.put(row.clustering(), Optional.of(row));
+            });
+            rows.forEach((clustering, optional) -> optional.ifPresent(row -> {
+
+                if (row.hasLiveData(nowInSec)) {
+                    service.upsert(key, row);
+                } else {
+                    service.delete(key, row);
+                }
+            }));
+        }
     }
 }
