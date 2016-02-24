@@ -117,6 +117,7 @@ public class IndexServiceWide extends IndexService {
             tokenMapper.addFields(document, key);
             partitionMapper.addFields(document, key);
             keyMapper.addFields(document, key, clustering);
+            ttlMapper.addFields(document,row);
             return Optional.of(document);
         }
     }

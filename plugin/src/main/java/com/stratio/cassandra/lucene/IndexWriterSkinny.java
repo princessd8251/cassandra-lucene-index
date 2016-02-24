@@ -83,16 +83,21 @@ public class IndexWriterSkinny extends IndexWriter {
             }
         });
         if (transactionType.equals(IndexTransaction.Type.COMPACTION)) {
-            Row row = null;
-            UnfilteredRowIterator iterator= service.read(key,nowInSec,opGroup);
-            if (iterator.hasNext()) {
-                row = (Row) iterator.next();
-            }
-            if (row!=null) {
-                if (row.hasLiveData(nowInSec)) {
-                    service.upsert(key, row);
-                } else {
-                    service.delete(key);
+            logger.trace("finish with type: COMPACTION");
+            //find if in there is a field for ttl in the idnex for this DecoratedKey
+            if (service.hasAnyyTLLExpiring(key)) {
+                logger.trace("hasAnyyTLLExpiring == true with key: {}",key);
+                Row row = null;
+                UnfilteredRowIterator iterator = service.read(key, nowInSec, opGroup);
+                if (iterator.hasNext()) {
+                    row = (Row) iterator.next();
+                }
+                if (row != null) {
+                    if (row.hasLiveData(nowInSec)) {
+                        service.upsert(key, row);
+                    } else {
+                        service.delete(key);
+                    }
                 }
             }
         }

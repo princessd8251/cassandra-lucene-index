@@ -99,21 +99,25 @@ public class IndexWriterWide extends IndexWriter {
             }
         }));
         if (transactionType.equals(IndexTransaction.Type.COMPACTION)) {
-            Map<Clustering, Optional<Row>> rows = new LinkedHashMap<>();
-            service.read(key, nowInSec, opGroup).forEachRemaining(unfiltered -> {
+            logger.trace("finish with type: COMPACTION");
+            if (service.hasAnyyTLLExpiring(key)) {
+                logger.trace("hasAnyyTLLExpiring == true with key: {}",key);
+                Map<Clustering, Optional<Row>> rows = new LinkedHashMap<>();
+                service.read(key, nowInSec, opGroup).forEachRemaining(unfiltered -> {
 
-                Row row = (Row) unfiltered;
+                    Row row = (Row) unfiltered;
 
-                rows.put(row.clustering(), Optional.of(row));
-            });
-            rows.forEach((clustering, optional) -> optional.ifPresent(row -> {
+                    rows.put(row.clustering(), Optional.of(row));
+                });
+                rows.forEach((clustering, optional) -> optional.ifPresent(row -> {
 
-                if (row.hasLiveData(nowInSec)) {
-                    service.upsert(key, row);
-                } else {
-                    service.delete(key, row);
-                }
-            }));
+                    if (row.hasLiveData(nowInSec)) {
+                        service.upsert(key, row);
+                    } else {
+                        service.delete(key, row);
+                    }
+                }));
+            }
         }
     }
 }

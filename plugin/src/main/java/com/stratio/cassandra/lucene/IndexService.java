@@ -27,6 +27,7 @@ import com.stratio.cassandra.lucene.index.DocumentIterator;
 import com.stratio.cassandra.lucene.index.FSIndex;
 import com.stratio.cassandra.lucene.index.RAMIndex;
 import com.stratio.cassandra.lucene.key.PartitionMapper;
+import com.stratio.cassandra.lucene.key.TTLMapper;
 import com.stratio.cassandra.lucene.key.TokenMapper;
 import com.stratio.cassandra.lucene.schema.Schema;
 import com.stratio.cassandra.lucene.search.Search;
@@ -86,6 +87,7 @@ public abstract class IndexService {
     protected final TokenMapper tokenMapper;
     protected final PartitionMapper partitionMapper;
     protected final ColumnsMapper columnsMapper;
+    protected final TTLMapper ttlMapper;
     protected final boolean mapsMultiCells;
 
     private final SearchCache searchCache;
@@ -127,6 +129,7 @@ public abstract class IndexService {
         tokenMapper = new TokenMapper(options.tokenRangeCacheSize);
         partitionMapper = new PartitionMapper(metadata);
         columnsMapper = new ColumnsMapper();
+        ttlMapper= new TTLMapper();
         mapsMultiCells = metadata.allColumns()
                                  .stream()
                                  .filter(x -> schema.getMappedCells().contains(x.name))
@@ -204,6 +207,7 @@ public abstract class IndexService {
      * @return a Lucene {@link Term} representing {@code key}
      */
     public Term term(DecoratedKey key) {
+        logger.trace("term key: {}",key);
         return partitionMapper.term(key);
     }
 
@@ -216,6 +220,7 @@ public abstract class IndexService {
      * @return {@code true} if read-before-write is required, {@code false} otherwise
      */
     public boolean needsReadBeforeWrite(DecoratedKey key, Row row) {
+        logger.trace("term key: {}",key);
         if (mapsMultiCells) {
             return true;
         } else {
@@ -274,6 +279,7 @@ public abstract class IndexService {
 
     /** Closes and removes all the index files. */
     public final void delete() {
+
         queue.shutdown();
         lucene.delete();
     }
@@ -285,6 +291,7 @@ public abstract class IndexService {
      * @param row the row to be upserted
      */
     public void upsert(DecoratedKey key, Row row) {
+        logger.trace("term key: {}",key);
         queue.submitAsynchronous(key, () ->
                 document(key, row).ifPresent(document -> {
                     Term term = term(key, row);
@@ -300,6 +307,7 @@ public abstract class IndexService {
      * @param row the row to be deleted
      */
     public void delete(DecoratedKey key, Row row) {
+        logger.trace("term key: {}",key);
         queue.submitAsynchronous(key, () -> {
             Term term = term(key, row);
             lucene.delete(term);
@@ -312,6 +320,7 @@ public abstract class IndexService {
      * @param key the partition key
      */
     public void delete(DecoratedKey key) {
+        logger.trace("term key: {}",key);
         queue.submitAsynchronous(key, () -> {
             Term term = term(key);
             lucene.delete(term);
@@ -325,6 +334,7 @@ public abstract class IndexService {
      * @return a searcher with which to perform the supplied command
      */
     public Index.Searcher searcher(ReadCommand command) {
+
 
         // Parse search
         String expression = expression(command);
@@ -361,6 +371,7 @@ public abstract class IndexService {
      * @return the {@link Search} contained in {@code command}
      */
     public Search search(ReadCommand command) {
+
         return SearchBuilder.fromJson(expression(command)).build();
     }
 
@@ -371,6 +382,7 @@ public abstract class IndexService {
      * @return the {@link Search} contained in {@code command}
      */
     public String expression(ReadCommand command) {
+
         for (Expression expression : command.rowFilter().getExpressions()) {
             if (expression.isCustom()) {
                 RowFilter.CustomExpression customExpression = (RowFilter.CustomExpression) expression;
@@ -391,6 +403,7 @@ public abstract class IndexService {
      * @return a Lucene {@link Query}
      */
     public Query query(Search search, ReadCommand command) {
+
         Query searchQuery = search.query(schema);
         Optional<Query> maybeKeyRangeQuery = query(command);
         if (maybeKeyRangeQuery.isPresent()) {
@@ -410,6 +423,7 @@ public abstract class IndexService {
      * @return the key range query
      */
     private Optional<Query> query(ReadCommand command) {
+
         if (command instanceof SinglePartitionReadCommand) {
             DecoratedKey key = ((SinglePartitionReadCommand) command).partitionKey();
             ClusteringIndexFilter clusteringFilter = command.clusteringIndexFilter(key);
@@ -447,6 +461,7 @@ public abstract class IndexService {
      * @return the query
      */
     public Query query(PartitionPosition position) {
+
         return position instanceof DecoratedKey
                ? partitionMapper.query((DecoratedKey) position)
                : tokenMapper.query(position.getToken());
@@ -460,6 +475,7 @@ public abstract class IndexService {
      * @return the query, or {@code null} if it doesn't filter anything
      */
     public Optional<Query> query(PartitionPosition start, PartitionPosition stop) {
+
         return tokenMapper.query(start, stop);
     }
 
@@ -471,6 +487,7 @@ public abstract class IndexService {
      * @return a Lucene sort according to {@code search}
      */
     private Sort sort(Search search) {
+        logger.trace("sort search: {}",search);
         List<SortField> sortFields = new ArrayList<>();
         if (search.usesSorting()) {
             sortFields.addAll(search.sortFields(schema));
@@ -530,6 +547,8 @@ public abstract class IndexService {
                                             ReadCommand command,
                                             ReadOrderGroup orderGroup,
                                             SearchCacheUpdater cacheUpdater) {
+        logger.trace("read");
+
         int limit = command.limits().count();
         DocumentIterator documents = lucene.search(query, sort, after, limit, fieldsToLoad());
         return indexReader(documents, command, orderGroup, cacheUpdater);
@@ -644,5 +663,16 @@ public abstract class IndexService {
         for (Row row : update) {
             schema.validate(columns(key, row));
         }
+    }
+
+
+    public boolean hasAnyyTLLExpiring(DecoratedKey key) {
+        logger.trace("hasAnyyTLLExpiring key: {}",key);
+        DocumentIterator documents = lucene.search(new TermQuery(term(key)),new Sort(), null, Integer.MAX_VALUE, new HashSet<>(Collections.singletonList(TTLMapper.FIELD_NAME)));
+        while(documents.hasNext()) {
+            if (ttlMapper.hasExpiring(documents.next().left))  return true;
+        }
+        return false;
+
     }
 }

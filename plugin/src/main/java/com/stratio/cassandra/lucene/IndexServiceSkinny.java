@@ -94,6 +94,7 @@ public class IndexServiceSkinny extends IndexService {
         } else {
             tokenMapper.addFields(document, key);
             partitionMapper.addFields(document, key);
+            ttlMapper.addFields(document,row);
             return Optional.of(document);
         }
     }
