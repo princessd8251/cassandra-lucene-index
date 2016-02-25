@@ -63,6 +63,7 @@ public class IndexWriterSkinny extends IndexWriter {
     /** {@inheritDoc} */
     @Override
     protected void index(Row row) {
+        logger.trace("index row: {}",row);
         this.optionalRow = Optional.of(row);
     }
 
@@ -83,7 +84,7 @@ public class IndexWriterSkinny extends IndexWriter {
             }
         });
         if (transactionType.equals(IndexTransaction.Type.COMPACTION)) {
-            logger.trace("finish with type: COMPACTION");
+            logger.trace("finish with type: COMPACTION optionalRow {}",optionalRow);
             //find if in there is a field for ttl in the idnex for this DecoratedKey
             if (service.hasAnyyTLLExpiring(key)) {
                 logger.trace("hasAnyyTLLExpiring == true with key: {}",key);
