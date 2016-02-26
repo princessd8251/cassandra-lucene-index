@@ -70,21 +70,22 @@ public class IndexWriterSkinny extends IndexWriter {
     /** {@inheritDoc} */
     @Override
     public void finish() {
-        optionalRow.ifPresent(row -> {
-            if (service.needsReadBeforeWrite(key, row)) {
-                UnfilteredRowIterator iterator = service.read(key, nowInSec, opGroup);
-                if (iterator.hasNext()) {
-                    row = (Row) iterator.next();
+        if (transactionType.equals(IndexTransaction.Type.UPDATE)) {
+            optionalRow.ifPresent(row -> {
+                if (service.needsReadBeforeWrite(key, row)) {
+                    UnfilteredRowIterator iterator = service.read(key, nowInSec, opGroup);
+                    if (iterator.hasNext()) {
+                        row = (Row) iterator.next();
+                    }
                 }
-            }
-            if (row.hasLiveData(nowInSec)) {
-                service.upsert(key, row);
-            } else {
-                service.delete(key);
-            }
-        });
-        if (transactionType.equals(IndexTransaction.Type.COMPACTION)) {
-            logger.trace("finish with type: COMPACTION optionalRow {}",optionalRow);
+                if (row.hasLiveData(nowInSec)) {
+                    service.upsert(key, row);
+                } else {
+                    service.delete(key);
+                }
+            });
+        } else if (transactionType.equals(IndexTransaction.Type.COMPACTION)) {
+            logger.trace("finish with type: COMPACTION optionalRow {}", optionalRow);
             //find if in there is a field for ttl in the idnex for this DecoratedKey
             if (service.hasAnyyTLLExpiring(key)) {
                 logger.trace("hasAnyyTLLExpiring == true with key: {}",key);
